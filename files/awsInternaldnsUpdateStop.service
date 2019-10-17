@@ -1,0 +1,16 @@
+[Unit]
+Description=AWS update hostname & internal dns
+Before=shutdown.target
+
+[Service]
+ExecStop=/usr/local/bin/awsInternaldnsUpdate.py --stop
+RemainAfterExit=yes
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=updateHostnameDns
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
+

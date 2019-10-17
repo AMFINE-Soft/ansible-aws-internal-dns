@@ -1,0 +1,15 @@
+[Unit]
+Description=AWS update hostname & internal dns
+After=network.target auditd.service
+
+[Service]
+ExecStart=/usr/local/bin/awsInternaldnsUpdate.py --start
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=updateHostnameDns
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
+

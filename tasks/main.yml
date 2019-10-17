@@ -1,0 +1,62 @@
+---
+- name: Ensure python3 is installed (Debian)
+  action: apt pkg=python3 state=present update_cache=yes
+  when: ansible_os_family == 'Debian'
+#to test
+- name: Ensure python3 is installed (RedHat).
+  yum: name=python3 state=installed
+  when: ansible_os_family == 'RedHat'
+
+- name: "create aws conf dir"
+  file:
+    path: "/root/.aws"
+    state: "directory"
+    mode: 0700
+    owner: root
+    group: root
+- name: "Copy AWS credentials"
+  template:
+    src: credentials.j2
+    dest: /root/.aws/credentials
+    owner: root
+    group: root
+    mode: 0600
+- name: "Copy AWS cli53 binary"
+  copy:
+    src: cli53
+    dest: /usr/local/bin/cli53
+    owner: root
+    group: root
+    mode: 0700
+- name: "Copy DNS update script"
+  template:
+    src: awsInternaldnsUpdate.py
+    dest: /usr/local/bin/awsInternaldnsUpdate.py
+    owner: root
+    group: root
+    mode: 0700
+- name: "Copy unitd stop"
+  copy:
+    src: awsInternaldnsUpdateStop.service
+    dest: /etc/systemd/system/awsInternaldnsUpdateStop.service
+    owner: root
+    group: root
+    mode: 0644
+  notify: "reload systemd"
+- name: "Copy unitd start"
+  copy:
+    src: awsInternaldnsUpdateStart.service
+    dest: /etc/systemd/system/awsInternaldnsUpdateStart.service
+    owner: root
+    group: root
+    mode: 0644
+  notify: "reload systemd"
+
+- name: "enable systemd unit"
+  systemd:
+    name: "{{ item }}"
+    enabled: yes
+    masked: no
+  with_items:
+    - awsInternaldnsUpdateStop.service
+    - awsInternaldnsUpdateStart.service
