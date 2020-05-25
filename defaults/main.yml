@@ -3,3 +3,8 @@ aws_dns_access_key_id: FIXME
 aws_dns_secret_access_key: FIXME
 aws_dns_zone_id: FIXME
 aws_dns_region: FIXME
+
+aws_dns_client_version: 0.8.17
+aws_dns_force_redeploy_cli53_binary: no
+
+#aws_dns_on_failure_notification:

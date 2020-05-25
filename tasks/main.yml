@@ -1,6 +1,6 @@
 ---
 - name: Ensure python3 is installed (Debian)
-  action: apt pkg=python3 state=present update_cache=yes
+  action: apt pkg=python3 state=present
   when: ansible_os_family == 'Debian'
 #to test
 - name: Ensure python3 is installed (RedHat).
@@ -14,20 +14,26 @@
     mode: 0700
     owner: root
     group: root
-- name: "Copy AWS credentials"
-  template:
-    src: credentials.j2
-    dest: /root/.aws/credentials
+- name: add route53 credentials to VM
+  blockinfile:
+    path: /root/.aws/credentials
     owner: root
     group: root
     mode: 0600
+    create: yes
+    marker: "# {mark} ANSIBLE MANAGED BLOCK aws-internal-dns"
+    block: |
+      [aws-internal-dns]
+      aws_access_key_id = {{ aws_dns_access_key_id }}
+      aws_secret_access_key = {{ aws_dns_secret_access_key }}
 - name: "Copy AWS cli53 binary"
-  copy:
-    src: cli53
+  get_url:
+    url: "https://github.com/barnybug/cli53/releases/download/{{ aws_dns_client_version }}/cli53-linux-amd64"
     dest: /usr/local/bin/cli53
     owner: root
     group: root
     mode: 0700
+    force: "{{ aws_dns_force_redeploy_cli53_binary }}"
 - name: "Copy DNS update script"
   template:
     src: awsInternaldnsUpdate.py
@@ -44,7 +50,7 @@
     mode: 0644
   notify: "reload systemd"
 - name: "Copy unitd start"
-  copy:
+  template:
     src: awsInternaldnsUpdateStart.service
     dest: /etc/systemd/system/awsInternaldnsUpdateStart.service
     owner: root
@@ -54,7 +60,7 @@
 
 - name: "enable systemd unit"
   systemd:
-    name: "{{ item }}"
+    name: "{{ item }}"
     enabled: yes
     masked: no
   with_items:
