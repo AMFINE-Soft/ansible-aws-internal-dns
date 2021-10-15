@@ -4,6 +4,8 @@ import argparse
 import os
 import socket
 import subprocess
+import requests
+import json
 
 # Args
 parser = argparse.ArgumentParser(description='stop, start dns hostname update script')
@@ -14,7 +16,7 @@ args = parser.parse_args()
 
 # internal dns zone
 zoneid = "{{ aws_dns_zone_id }}"
-region = "{{ aws_dns_region }}"
+region = json.loads(requests.get(' http://169.254.169.254/latest/dynamic/instance-identity/document').text)['region']
 
 
 # get hostname
