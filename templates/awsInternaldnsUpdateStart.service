@@ -1,11 +1,12 @@
 [Unit]
 Description=AWS update hostname & internal dns
-After=network.target auditd.service
+After=network.target auditd.service ntp.service
 {% if aws_dns_on_failure_notification is defined %}
 {{ aws_dns_on_failure_notification }}
 {% endif %}
 
 [Service]
+ExecStartPre=sleep 5
 ExecStart=/usr/local/bin/awsInternaldnsUpdate.py --start
 StandardOutput=syslog
 StandardError=syslog
