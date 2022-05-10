@@ -6,7 +6,7 @@ After=network.target auditd.service ntp.service
 {% endif %}
 
 [Service]
-ExecStartPre=sleep 5
+ExecStartPre=/bin/sleep 15
 ExecStart=/usr/local/bin/awsInternaldnsUpdate.py --start
 StandardOutput=syslog
 StandardError=syslog
