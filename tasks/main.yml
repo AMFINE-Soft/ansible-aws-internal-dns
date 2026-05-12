@@ -41,14 +41,19 @@
     owner: root
     group: root
     mode: 0700
-- name: "Copy unitd stop"
-  copy:
-    src: awsInternaldnsUpdateStop.service
-    dest: /etc/systemd/system/awsInternaldnsUpdateStop.service
-    owner: root
-    group: root
-    mode: 0644
-  notify: "reload systemd"
+- name: "Stop and disable obsolete shutdown service (now removed - it delayed reboots)"
+  systemd:
+    name: awsInternaldnsUpdateStop.service
+    state: stopped
+    enabled: no
+  failed_when: false
+
+- name: "Remove obsolete shutdown service unit file"
+  file:
+    path: /etc/systemd/system/awsInternaldnsUpdateStop.service
+    state: absent
+  notify: "aws-internal-dns daemon reload"
+
 - name: "Copy unitd start"
   template:
     src: awsInternaldnsUpdateStart.service
@@ -56,13 +61,10 @@
     owner: root
     group: root
     mode: 0644
-  notify: "reload systemd"
+  notify: "aws-internal-dns daemon reload"
 
 - name: "enable systemd unit"
   systemd:
-    name: "{{ item }}"
+    name: awsInternaldnsUpdateStart.service
     enabled: yes
     masked: no
-  with_items:
-    - awsInternaldnsUpdateStop.service
-    - awsInternaldnsUpdateStart.service

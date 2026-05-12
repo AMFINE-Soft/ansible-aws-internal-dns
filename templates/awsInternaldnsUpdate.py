@@ -18,6 +18,8 @@ args = parser.parse_args()
 zoneid = "{{ aws_dns_zone_id }}"
 region = json.loads(requests.get(' http://169.254.169.254/latest/dynamic/instance-identity/document').text)['region']
 
+CLOUD_INIT_DROPIN = "/etc/cloud/cloud.cfg.d/99-amfine-hostname.cfg"
+
 
 # get hostname
 def get_ec2_hostname():
@@ -41,43 +43,61 @@ def get_ip_address(ifname):
     return ip
 
 
-# /etc/hosts has already been updated ?
-def hosts_exists(hostname):
-    filename = "/etc/hosts"
-    f = open(filename, 'r')
-    hostfiledata = f.readlines()
-    print("hostname : " + hostname)
-    for item in hostfiledata:
-        if hostname in item:
-            return True
-    f.close()
+# look up Route53 zone name from its ID; strips trailing dot
+def get_zone_name():
+    cmd = ("/usr/bin/aws route53 get-hosted-zone "
+           "--id " + zoneid + " --profile aws-internal-dns "
+           "--output text --query HostedZone.Name")
+    out = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=True)
+    return out.stdout.strip().rstrip(".")
+
+
+# force kernel/static hostname to expected_short if it differs
+def ensure_hostname(expected_short):
+    current = socket.gethostname()
+    if current != expected_short:
+        print("hostname mismatch: current=" + current + " expected=" + expected_short + " - fixing")
+        subprocess.run(["/usr/bin/hostnamectl", "set-hostname", expected_short], check=True)
+    else:
+        print("hostname already correct: " + current)
+
+
+# Drop a per-instance cloud-init drop-in so cloud-init manages hostname/fqdn/etc-hosts natively on every boot.
+# Transitional bridge until per-instance hostname is delivered via Terraform user-data;
+# when that lands this file becomes redundant (and harmless).
+# Note: when baking an AMI, remove this file (or run `cloud-init clean`) so VMs from the AMI
+# don't inherit the bake-instance's hostname before correcting it.
+def write_cloudinit_dropin(short, fqdn):
+    cfg = (
+        "# Managed by aws-internal-dns role - do not edit by hand\n"
+        "hostname: " + short + "\n"
+        "fqdn: " + fqdn + "\n"
+        "preserve_hostname: false\n"
+        "prefer_fqdn_over_hostname: false\n"
+    )
+    os.makedirs(os.path.dirname(CLOUD_INIT_DROPIN), exist_ok=True)
+    with open(CLOUD_INIT_DROPIN, "w") as f:
+        f.write(cfg)
+
+
+# True if /etc/hosts already contains the expected '<fqdn> <short>' pair on a 127.0.1.1 line
+# (which is what cloud-init's Debian template renders).
+def is_hosts_in_sync(short, fqdn):
+    try:
+        with open("/etc/hosts", "r") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 3 and parts[0] == "127.0.1.1" and parts[1] == fqdn and parts[2] == short:
+                    return True
+    except FileNotFoundError:
+        pass
     return False
 
 
-# Update etc/hosts
-def update_hostname(instanceip, hostname):
-    filename = "/etc/hosts"
-    outputfile = open(filename, 'a')
-    entry = "\n" + instanceip + "\t" + hostname + "\n"
-    outputfile.writelines(entry)
-    outputfile.close()
-
-
-# check hostname and set it if necessary
-def isDefaultHostname(instanceip):
-    hostname = socket.gethostname()
-    if "ip-" in hostname or "None" in hostname:
-        hostname = get_ec2_hostname()
-        # Update hostname
-        os.system('/bin/hostname ' + hostname)
-        # Update hostname file
-        hostnamefile = "/etc/hostname"
-        hostnameopen = open(hostnamefile, 'w')
-        hostnameopen.write(hostname)
-        hostnameopen.close()
-        return hostname
-    else:
-        return hostname
+# Force cloud-init to re-render /etc/hosts from the current config (incl. our just-written drop-in).
+# This closes the "tag change requires two reboots" gap.
+def regenerate_etc_hosts():
+    subprocess.run(["/usr/bin/cloud-init", "single", "-n", "cc_update_etc_hosts"], check=True)
 
 
 # Create, update or delete hostname entry
@@ -87,20 +107,21 @@ def dealwithDNSEntry(cmd):
 
 def main():
     instanceip = get_ip_address("{{ ansible_default_ipv4.interface }}")
-    hostname = isDefaultHostname(instanceip)
+    expected_short = get_ec2_hostname()
 
     if args.stop:
-        cmd = "/usr/local/bin/cli53 rrdelete " + zoneid + " " + hostname + " A  --profile aws-internal-dns"
+        cmd = "/usr/local/bin/cli53 rrdelete " + zoneid + " " + expected_short + " A  --profile aws-internal-dns"
         dealwithDNSEntry(cmd)
 
     elif args.start:
-        cmd = "/usr/local/bin/cli53 rrcreate " + zoneid + " '" + hostname + " 60 A " + instanceip + "' --replace  --profile aws-internal-dns"
+        expected_fqdn = expected_short + "." + get_zone_name()
+        ensure_hostname(expected_short)
+        write_cloudinit_dropin(expected_short, expected_fqdn)
+        if not is_hosts_in_sync(expected_short, expected_fqdn):
+            print("/etc/hosts is out of sync (drift or first run) - asking cloud-init to re-render")
+            regenerate_etc_hosts()
+        cmd = "/usr/local/bin/cli53 rrcreate " + zoneid + " '" + expected_short + " 60 A " + instanceip + "' --replace  --profile aws-internal-dns"
         dealwithDNSEntry(cmd)
-        # Update hosts file if necessary
-        if hosts_exists(hostname):
-            print("hostname already exists in host file")
-        else:
-            update_hostname(instanceip, hostname)
 
 
 if __name__ == '__main__':
