@@ -106,14 +106,15 @@ def dealwithDNSEntry(cmd):
 
 
 def main():
-    instanceip = get_ip_address("{{ ansible_default_ipv4.interface }}")
-    expected_short = get_ec2_hostname()
-
+    # --stop is accepted but is a deliberate no-op: the shutdown service has been removed
+    # because it caused slow reboots. If a legacy unit still fires --stop, we don't want
+    # it to delete the Route53 record.
     if args.stop:
-        cmd = "/usr/local/bin/cli53 rrdelete " + zoneid + " " + expected_short + " A  --profile aws-internal-dns"
-        dealwithDNSEntry(cmd)
+        return
 
-    elif args.start:
+    if args.start:
+        instanceip = get_ip_address("{{ ansible_default_ipv4.interface }}")
+        expected_short = get_ec2_hostname()
         expected_fqdn = expected_short + "." + get_zone_name()
         ensure_hostname(expected_short)
         write_cloudinit_dropin(expected_short, expected_fqdn)

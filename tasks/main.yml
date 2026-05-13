@@ -63,8 +63,37 @@
     mode: 0644
   notify: "aws-internal-dns daemon reload"
 
-- name: "enable systemd unit"
+- name: "Copy unit refresh (service)"
+  template:
+    src: awsInternaldnsUpdateRefresh.service.j2
+    dest: /etc/systemd/system/awsInternaldnsUpdateRefresh.service
+    owner: root
+    group: root
+    mode: 0644
+  notify: "aws-internal-dns daemon reload"
+
+- name: "Copy unit refresh (timer)"
+  template:
+    src: awsInternaldnsUpdateRefresh.timer.j2
+    dest: /etc/systemd/system/awsInternaldnsUpdateRefresh.timer
+    owner: root
+    group: root
+    mode: 0644
+  notify: "aws-internal-dns daemon reload"
+
+# Flush handlers so daemon-reload runs before we try to enable+start the new timer
+- name: "Reload systemd before enabling the refresh timer"
+  meta: flush_handlers
+
+- name: "Enable boot service"
   systemd:
     name: awsInternaldnsUpdateStart.service
     enabled: yes
+    masked: no
+
+- name: "Enable + start refresh timer"
+  systemd:
+    name: awsInternaldnsUpdateRefresh.timer
+    enabled: yes
+    state: started
     masked: no

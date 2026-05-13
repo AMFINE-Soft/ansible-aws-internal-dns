@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodic refresh of hostname and Route53 record (drift correction)
+
+[Timer]
+OnCalendar={{ aws_dns_refresh_interval | default('hourly') }}
+RandomizedDelaySec={{ aws_dns_refresh_jitter | default('30min') }}
+Persistent=true
+Unit=awsInternaldnsUpdateRefresh.service
+
+[Install]
+WantedBy=timers.target

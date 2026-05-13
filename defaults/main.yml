@@ -7,4 +7,10 @@ aws_dns_region: FIXME
 aws_dns_client_version: 0.8.17
 aws_dns_force_redeploy_cli53_binary: no
 
+# Periodic drift-correction refresh (via systemd timer)
+# OnCalendar spec — see `man systemd.time` (e.g. hourly, daily, *-*-* 06:00:00)
+aws_dns_refresh_interval: hourly
+# Per-host random delay added to each fire — spreads load across the fleet to stay under Route53's 5 rps account quota
+aws_dns_refresh_jitter: 30min
+
 #aws_dns_on_failure_notification:

@@ -1,0 +1,13 @@
+[Unit]
+Description=Periodic refresh of hostname and Route53 record (drift correction)
+After=network-online.target
+{% if aws_dns_on_failure_notification is defined %}
+{{ aws_dns_on_failure_notification }}
+{% endif %}
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/awsInternaldnsUpdate.py --start
+SyslogIdentifier=updateHostnameDns
+User=root
+Group=root
